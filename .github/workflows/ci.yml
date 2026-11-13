@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 # A superseded run tells you nothing; cancel it rather than pay for it.
 concurrency:
   group: ci-${{ github.ref }}
@@ -14,6 +17,7 @@ concurrency:
 jobs:
   gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash -l {0}
@@ -77,10 +81,10 @@ jobs:
       - name: Assert the DP call is still emitted inside a nogil region
         run: python scripts/assert_gil_release.py hmm/hmm.c
 
-      - name: Unit suite, Tier 1 equivalence gate, characterization
-        run: python -m unittest discover tests -v
-
-      - name: Coverage ratchet
+      # One pass: `coverage run` exits non-zero on any test failure, so this is the full
+      # suite and the ratchet together. Running the suite a second time without coverage
+      # only doubled the slowest step.
+      - name: Unit suite, Tier 1 equivalence gate, characterization, coverage ratchet
         run: make coverage-ratchet
 
       - name: Upload coverage
@@ -90,12 +94,14 @@ jobs:
           name: coverage
           path: .coverage-now
           if-no-files-found: ignore
+          retention-days: 14
 
   # Tier 2 needs VNtyper's 1.8 GB corpus, so it cannot run on a hosted runner.
   # Kept as a documented manual entry point rather than a job that silently never runs.
   tier2-note:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Explain how to run the full-corpus gate
         run: |
